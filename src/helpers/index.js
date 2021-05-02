@@ -1,0 +1,3 @@
+function renderPDF() {
+  return null;
+}
