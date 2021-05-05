@@ -78,12 +78,13 @@ router.get("/:username", authenticateRequest, async (req, res, next) => {
 });
 
 // @ Update User
-router.patch("/:username", async (req, res, next) => {
+router.patch("/", authenticateRequest, async (req, res, next) => {
+  // Updated Info
   const { name, username, email, avatar } = req.body;
 
   try {
     const user = await User.findOne({
-      username: req.params.username,
+      username: req.user.username,
     });
 
     if (!user) {
@@ -117,9 +118,10 @@ router.patch("/:username", async (req, res, next) => {
   }
 });
 
-router.patch("/:username/password", async (req, res, next) => {
+// @ Update User password
+router.patch("/password", authenticateRequest, async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
-  const { username } = req.params;
+  const { username } = req.user;
 
   try {
     const user = await User.findOne({ username });
@@ -142,8 +144,8 @@ router.patch("/:username/password", async (req, res, next) => {
 });
 
 // @ Delete account by username
-router.delete("/:username", async (req, res, next) => {
-  const { username } = req.params;
+router.delete("/", authenticateRequest, async (req, res, next) => {
+  const { username } = req.user;
 
   try {
     const user = await User.findOne({ username });
