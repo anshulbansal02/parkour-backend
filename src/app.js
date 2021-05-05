@@ -3,6 +3,7 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const cors = require("cors");
 const mongoose = require("mongoose");
+
 require("dotenv").config();
 
 const controllers = require("./api/index.js");
@@ -33,6 +34,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/plan", controllers.planRoute);
 app.use("/api/account", controllers.accountRoute);
+app.use("/api/user", controllers.userRoute);
 
 // 404 handler
 app.use((req, res) => {
