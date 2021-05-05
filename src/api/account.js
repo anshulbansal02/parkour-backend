@@ -1,5 +1,7 @@
 const { Router } = require("express");
+
 const { User } = require("../entities/index.js");
+const { authenticateRequest } = require("../auth/index.js");
 
 const { stringFields } = require("../utils/index.js");
 
@@ -47,26 +49,28 @@ router.post("/register", async (req, res, next) => {
 });
 
 // @ Get User by username
-router.get("/:username", async (req, res, next) => {
-  // Include private info if authenticated else public only
+router.get("/:username", authenticateRequest, async (req, res, next) => {
+  // If the requested profile is of authenticated user then show private info else only public
 
   const { username } = req.params;
 
   try {
-    const user = await User.findOne(
-      {
-        username,
-      },
-      { name: 1, username: 1, email: 1, avatar: 1, verified: 1 }
-    );
+    const user = await User.findOne({ username });
 
     if (!user) {
       throw new Error("User does not exist with given username");
     } else {
-      res.json({
-        status: "OK",
-        data: user,
-      });
+      if (req.user.username === username) {
+        res.json({
+          status: "ok",
+          data: user.getProfile(),
+        });
+      } else {
+        res.json({
+          status: "ok",
+          data: user.getPublicProfile(),
+        });
+      }
     }
   } catch (err) {
     next(err);
