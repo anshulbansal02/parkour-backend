@@ -34,14 +34,24 @@ UserSchema.methods.setPassword = async function (value) {
 };
 
 UserSchema.methods.isValidPassword = async function (value) {
-  return await bcrypt.compare(value, this.password, (err, same) => {
-    return same;
-  });
+  try {
+    return await bcrypt.compare(value, this.password);
+  } catch (err) {
+    return err;
+  }
+  // return bcrypt.compare(value, this.password, (err, same) => {
+  //   return same;
+  // });
 };
 
 UserSchema.methods.getProfile = function () {
   const { name, username, email, avatar, verified } = this;
   return { name, username, email, avatar, verified };
+};
+
+UserSchema.methods.getPublicProfile = function () {
+  const { name, username, avatar } = this;
+  return { name, username, avatar };
 };
 
 // Indices
