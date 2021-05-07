@@ -6,10 +6,18 @@ const mongoose = require("mongoose");
 
 require("dotenv").config();
 
+const {
+  notFoundErrorHandler,
+  genericErrorHandler,
+} = require("./api/handlers.js");
 const controllers = require("./api/index.js");
+const Response = require("./response/index.js");
+const { OK } = Response;
 
+// App Instance
 const app = express();
 
+// DB Connection
 const DB_URI = process.env.DB_URI || "mongodb://localhost/parkour";
 mongoose.connect(DB_URI, {
   useNewUrlParser: true,
@@ -23,35 +31,25 @@ db.once("open", () => {
   console.log("[INFO] Connected to database");
 });
 
+// Middlewares
 app.use(helmet());
 app.use(cors());
 app.use(morgan("common"));
 app.use(express.json());
+app.use(Response.middleware);
 
 app.get("/", (req, res) => {
-  res.end("Parkour API");
+  res.dispatch(new OK({ message: "Welcome to Parkour" }));
 });
 
+// Controller Routes
 app.use("/api/plan", controllers.planRoute);
 app.use("/api/account", controllers.accountRoute);
 app.use("/api/user", controllers.userRoute);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    status: "NotFound",
-    message: `Requested resource ${req.url} was not found`,
-  });
-});
-
-// Generic Error handler
-app.use((err, req, res, next) => {
-  res.status(res.statusCode || 500);
-  res.json({
-    status: err.name,
-    message: err.message || "Internal server error",
-  });
-});
+// Error Handlers
+app.use(notFoundErrorHandler);
+app.use(genericErrorHandler);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
