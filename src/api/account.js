@@ -1,4 +1,5 @@
 const { Router } = require("express");
+const jwt = require("jsonwebtoken");
 
 const { User } = require("../entities/index.js");
 const { authenticate } = require("../auth/index.js");
@@ -7,7 +8,7 @@ const Response = require("./../response/index.js");
 const { stringFields } = require("../utils/index.js");
 
 const router = Router();
-const { BadRequest, OK, NoContent, Unauthorized } = Response;
+const { BadRequest, OK, NotFound, Unauthorized } = Response;
 
 // Create Account
 router.post("/register", async (req, res, next) => {
@@ -52,14 +53,14 @@ router.get(
   authenticate((delegateResponse = true)),
   async (req, res, next) => {
     // If the requested profile is of authenticated user then show private info else only public
-
     const { username } = req.params;
 
     try {
       const user = await User.findOne({ username });
 
       if (!user) {
-        res.dispatch(new NoContent("User does not exist"));
+        res.dispatch(new NotFound("User does not exist"));
+        return;
       } else {
         if (req.user?.username === username) {
           res.dispatch(new OK({ data: user.getProfile() }));
@@ -75,9 +76,9 @@ router.get(
 );
 
 // @ Update User
-router.patch("/", authenticate(), async (req, res, next) => {
+router.patch("/profile", authenticate(), async (req, res, next) => {
   // Updated Info
-  const { name, username, avatar } = req.body;
+  const { name, username, avatar, bio } = req.body;
 
   try {
     const user = await User.findOne({
@@ -85,7 +86,7 @@ router.patch("/", authenticate(), async (req, res, next) => {
     });
 
     if (!user) {
-      res.dispatch(new NoContent("User does not exist"));
+      res.dispatch(new NotFound("User does not exist"));
       return;
     } else {
       // Change this approach & check username availability prior to changing
@@ -100,7 +101,11 @@ router.patch("/", authenticate(), async (req, res, next) => {
   } catch (err) {
     if (err.name === "ValidationError")
       res.dispatch(
-        new BadRequest(`Please provide valid ${stringFields(err.errors)}`)
+        new BadRequest(
+          `Please provide ${
+            Object.keys(err.errors).length === 1 ? "a" : ""
+          } valid ${stringFields(err.errors)}`
+        )
       );
     else next(err);
   }
@@ -115,7 +120,7 @@ router.patch("/password", authenticate(), async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.dispatch(new NoContent("User does not exist"));
+      res.dispatch(new BadRequest("Unknown user"));
       return;
     } else {
       if (await user.isValidPassword(currentPassword)) {
@@ -131,6 +136,8 @@ router.patch("/password", authenticate(), async (req, res, next) => {
   }
 });
 
+router.patch("/email", authenticate(), async (req, res, next) => {});
+
 // @ Delete account by username
 router.delete("/", authenticate(), async (req, res, next) => {
   const { username } = req.user;
@@ -139,7 +146,7 @@ router.delete("/", authenticate(), async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.dispatch(new BadRequest("User does not exist with given username"));
+      res.dispatch(new BadRequest("Unknown user"));
       return;
     } else {
       await User.deleteOne({ username });
