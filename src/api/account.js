@@ -1,7 +1,7 @@
 const { Router } = require("express");
 
 const { User } = require("../entities/index.js");
-const { authenticateRequest } = require("../auth/index.js");
+const { authenticate } = require("../auth/index.js");
 const Response = require("./../response/index.js");
 
 const { stringFields } = require("../utils/index.js");
@@ -47,27 +47,32 @@ router.post("/register", async (req, res, next) => {
 });
 
 // @ Get User by username
-router.get("/:username", authenticateRequest, async (req, res, next) => {
-  // If the requested profile is of authenticated user then show private info else only public
+router.get(
+  "/:username",
+  authenticate((delegateResponse = true)),
+  async (req, res, next) => {
+    // If the requested profile is of authenticated user then show private info else only public
 
-  const { username } = req.params;
+    const { username } = req.params;
 
-  try {
-    const user = await User.findOne({ username });
+    try {
+      const user = await User.findOne({ username });
 
-    if (!user) {
-      res.dispatch(new NoContent("User does not exist"));
-    } else {
-      if (req.user.username === username) {
-        res.dispatch(new OK({ data: user.getProfile() }));
+      if (!user) {
+        res.dispatch(new NoContent("User does not exist"));
       } else {
-        res.dispatch(new OK({ data: user.getPublicProfile() }));
+        if (req.user?.username === username) {
+          res.dispatch(new OK({ data: user.getProfile() }));
+        } else {
+          res.dispatch(new OK({ data: user.getPublicProfile() }));
+        }
       }
+    } catch (err) {
+      console.log(err.name, err.message);
+      next(err);
     }
-  } catch (err) {
-    next(err);
   }
-});
+);
 
 // @ Update User
 router.patch("/", authenticateRequest, async (req, res, next) => {
