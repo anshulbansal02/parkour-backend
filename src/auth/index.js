@@ -28,6 +28,7 @@ function authenticate(delegateResponse = false) {
 
       if (await Session.findOne({ _id: token })) {
         req.user = data;
+        req.token = token;
         next();
       } else {
         _next();
@@ -50,4 +51,8 @@ async function createSession(payload) {
   return token;
 }
 
-module.exports = { createSession, authenticate };
+async function destroySession(token) {
+  await Session.deleteOne({ _id: token });
+}
+
+module.exports = { createSession, authenticate, destroySession };
