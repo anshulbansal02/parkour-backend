@@ -2,12 +2,12 @@ const { Router } = require("express");
 
 const { User } = require("../entities/index.js");
 const { authenticateRequest } = require("../auth/index.js");
+const Response = require("./../response/index.js");
 
 const { stringFields } = require("../utils/index.js");
 
 const router = Router();
-
-// Authentication Middlewares
+const { BadRequest, OK, NoContent, Unauthorized } = Response;
 
 // Create Account
 router.post("/register", async (req, res, next) => {
@@ -26,24 +26,22 @@ router.post("/register", async (req, res, next) => {
       $or: [{ email }, { username }],
     });
     if (existingUser) {
-      res.status(400);
+      let msg = "";
       if (existingUser.email === email)
-        throw new Error("A user is already registered with the given email.");
-      else if (existingUser.username === username)
-        throw new Error("Username is not available.");
+        msg = "The email already has a registered account";
+      else msg = "Username not available";
+      res.dispatch(new BadRequest(msg));
     }
 
     await user.setPassword(password);
     await user.save();
 
-    res.json({
-      status: "OK",
-      data: user.getProfile(),
-    });
+    res.dispatch(new OK({ data: user.getProfile() }));
   } catch (err) {
-    res.status(400);
     if (err.name === "ValidationError") {
-      next(new Error(`Please provide valid ${stringFields(err.errors)}`));
+      res.dispatch(
+        new BadRequest(`Please provide valid ${stringFields(err.errors)}`)
+      );
     } else next(err);
   }
 });
@@ -58,18 +56,12 @@ router.get("/:username", authenticateRequest, async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      throw new Error("User does not exist with given username");
+      res.dispatch(new NoContent("User does not exist"));
     } else {
       if (req.user.username === username) {
-        res.json({
-          status: "ok",
-          data: user.getProfile(),
-        });
+        res.dispatch(new OK({ data: user.getProfile() }));
       } else {
-        res.json({
-          status: "ok",
-          data: user.getPublicProfile(),
-        });
+        res.dispatch(new OK({ data: user.getPublicProfile() }));
       }
     }
   } catch (err) {
@@ -80,7 +72,7 @@ router.get("/:username", authenticateRequest, async (req, res, next) => {
 // @ Update User
 router.patch("/", authenticateRequest, async (req, res, next) => {
   // Updated Info
-  const { name, username, email, avatar } = req.body;
+  const { name, username, avatar } = req.body;
 
   try {
     const user = await User.findOne({
@@ -88,33 +80,24 @@ router.patch("/", authenticateRequest, async (req, res, next) => {
     });
 
     if (!user) {
-      throw new Error("User does not exist with given username");
+      res.dispatch(new NoContent("User does not exist"));
+      return;
     } else {
       // Change this approach & check username availability prior to changing
       user.name = name ? name : user.name;
       user.username = username ? username : user.username;
-      user.email = email ? email : user.email;
-
-      // Check if email was changed
-      if (user.isModified("email")) {
-        // trigger email verification
-      }
 
       await user.validate();
       await user.save();
 
-      res.json({
-        status: "OK",
-        data: user.getProfile(),
-      });
+      res.dispatch(new OK({ data: user.getProfile() }));
     }
   } catch (err) {
-    res.status(400);
-
     if (err.name === "ValidationError")
-      next(new Error(`Please provide valid ${stringFields(err.errors)}`));
-
-    next(err);
+      res.dispatch(
+        new BadRequest(`Please provide valid ${stringFields(err.errors)}`)
+      );
+    else next(err);
   }
 });
 
@@ -127,15 +110,13 @@ router.patch("/password", authenticateRequest, async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      throw new Error("User does not exist with given username");
+      res.dispatch(new NoContent("User does not exist"));
+      return;
     } else {
       if (user.isValidPassword(currentPassword)) {
         user.setPassword(newPassword);
       } else {
-        res.json({
-          status: "Unauthorized",
-          message: "Current password is incorrect",
-        });
+        res.dispatch(new Unauthorized("Current password is incorrect."));
       }
     }
   } catch (err) {
@@ -151,14 +132,13 @@ router.delete("/", authenticateRequest, async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.status(400);
-      throw new Error("User does not exist with given username");
+      res.dispatch(new BadRequest("User does not exist with given username"));
+      return;
     } else {
       await User.deleteOne({ username });
-      res.json({
-        status: "OK",
-        data: user.getProfile(),
-      });
+      res.dispatch(new OK({ data: user.getProfile() }));
+
+      // Delete users plans as well
     }
   } catch (err) {
     next(err);

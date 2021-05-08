@@ -39,7 +39,7 @@ app.use(express.json());
 app.use(Response.middleware);
 
 app.get("/", (req, res) => {
-  res.dispatch(new OK({ message: "Welcome to Parkour" }));
+  res.dispatch(new OK("Welcome to Parkour"));
 });
 
 // Controller Routes
