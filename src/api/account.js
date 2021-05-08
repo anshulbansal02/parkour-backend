@@ -75,7 +75,7 @@ router.get(
 );
 
 // @ Update User
-router.patch("/", authenticateRequest, async (req, res, next) => {
+router.patch("/", authenticate(), async (req, res, next) => {
   // Updated Info
   const { name, username, avatar } = req.body;
 
@@ -107,7 +107,7 @@ router.patch("/", authenticateRequest, async (req, res, next) => {
 });
 
 // @ Update User password
-router.patch("/password", authenticateRequest, async (req, res, next) => {
+router.patch("/password", authenticate(), async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
   const { username } = req.user;
 
@@ -118,8 +118,10 @@ router.patch("/password", authenticateRequest, async (req, res, next) => {
       res.dispatch(new NoContent("User does not exist"));
       return;
     } else {
-      if (user.isValidPassword(currentPassword)) {
-        user.setPassword(newPassword);
+      if (await user.isValidPassword(currentPassword)) {
+        await user.setPassword(newPassword);
+        await user.save();
+        res.dispatch(new OK("Password was changed successfully"));
       } else {
         res.dispatch(new Unauthorized("Current password is incorrect."));
       }
@@ -130,7 +132,7 @@ router.patch("/password", authenticateRequest, async (req, res, next) => {
 });
 
 // @ Delete account by username
-router.delete("/", authenticateRequest, async (req, res, next) => {
+router.delete("/", authenticate(), async (req, res, next) => {
   const { username } = req.user;
 
   try {
