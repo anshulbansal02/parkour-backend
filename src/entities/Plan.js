@@ -3,7 +3,11 @@ const { model, Schema } = require("mongoose");
 const Slot = {
   label: { type: String, required: true, trim: true, maxlength: 50 },
   notes: { type: String },
-  items: [Schema.Types.ObjectId],
+  items: {
+    type: [Schema.Types.ObjectId],
+    ref: "InventoryItems",
+    required: true,
+  },
 };
 
 const PlanSchema = new Schema({
@@ -11,7 +15,7 @@ const PlanSchema = new Schema({
   notes: { type: String, maxlength: 500 },
   meta: { type: Object },
   slots: { type: [Slot], required: true },
-  owner: { type: Schema.Types.ObjectId, required: true },
+  owner: { type: Schema.Types.ObjectId, ref: "Users", required: true },
   pinned: { type: Boolean, default: false },
   createdOn: { type: Date, default: new Date() },
   updatedOn: { type: Date },
