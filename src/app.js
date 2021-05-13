@@ -44,7 +44,6 @@ app.get("/", (req, res) => {
 
 // Controller Routes
 app.use("/api/plan", controllers.planRoute);
-app.use("/api/account", controllers.accountRoute);
 app.use("/api/user", controllers.userRoute);
 
 // Error Handlers

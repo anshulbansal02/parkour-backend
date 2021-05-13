@@ -1,24 +1,39 @@
 const { Router } = require("express");
+const mongoose = require("mongoose");
+const { nanoid } = require("nanoid");
 
-const Plan = require("./../entities/index.js");
+const { Plan, User } = require("./../entities/index.js");
 
 const Response = require("../response/index.js");
 const { authenticate } = require("../auth/index.js");
 
+const { stringFields } = require("../utils/index.js");
+
 const router = Router();
 const { BadRequest, OK } = Response;
 
-// Authentication Middlewares
-
 // CREATE
-router.post("/", authenticate(), async (req, res, next) => {
-  const { title, notes, meta, slots } = req.body;
+router.post("/", async (req, res, next) => {
+  const { title, notes, meta, slots, type } = req.body;
+  // const { username } = req.user;
+  const username = "anshulbansal";
 
   // Check if meta object is valid
 
   try {
-    // TODO: Add owner as well
-    const plan = new Plan({ title, notes, meta, slots });
+    const { _id } = User.findOne({ username }).select("_id");
+
+    const plan = new Plan({
+      title,
+      type,
+      notes,
+      meta,
+      slots,
+      owner: mongoose.Types.ObjectId(_id),
+    });
+
+    // TODO: check if its required to validate meta
+    // TODO: check if its required to validate each inventoryItem in slots
 
     await plan.validate();
     await plan.save();
@@ -26,12 +41,16 @@ router.post("/", authenticate(), async (req, res, next) => {
     // TODO: Include only necessary keys
     res.dispatch(new OK({ data: plan }));
   } catch (err) {
-    next(err);
+    if (err.name === "ValidationError")
+      res.dispatch(
+        new BadRequest(`Please provide valid ${stringFields(err.errors)}`)
+      );
+    else next(err);
   }
 });
 
 // READ
-router.get("/:id", authenticate(),(req, res,next) => {
+router.get("/:id", authenticate(), async (req, res, next) => {
   const { id } = req.params;
 
   try {
@@ -45,19 +64,19 @@ router.get("/:id", authenticate(),(req, res,next) => {
 });
 
 // UPDATE
-router.patch("/:id",authenticate(), (req, res, next) => {
+router.patch("/:id", authenticate(), async (req, res, next) => {
   const { id } = req.params;
   const { title, notes, meta, slots, pinned } = req.body;
 });
 
 // DELETE
-router.delete("/:id", authenticate(),(req, res, next) => {
+router.delete("/:id", authenticate(), async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    await Plan.delete()
+    await Plan.delete();
   } catch (err) {
-    next(err)
+    next(err);
   }
 });
 
