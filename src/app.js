@@ -43,8 +43,8 @@ app.get("/", (req, res) => {
 });
 
 // Controller Routes
-app.use("/api/plan", controllers.planRoute);
-app.use("/api/user", controllers.userRoute);
+app.use("/api/plans", controllers.planRoute);
+app.use("/api/users", controllers.userRoute);
 
 // Error Handlers
 app.use(notFoundErrorHandler);
