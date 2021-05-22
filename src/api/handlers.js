@@ -5,7 +5,9 @@ function notFoundErrorHandler(req, res) {
 }
 
 function genericErrorHandler(err, req, res, next) {
-  res.dispatch(new ServerError(process.env.NODE_ENV === "dev" ? err : null));
+  const isDev = process.env.NODE_ENV === "dev";
+  isDev ? console.log(err) : null;
+  res.dispatch(new ServerError(isDev ? err.message : null));
 }
 
 module.exports = { notFoundErrorHandler, genericErrorHandler };
