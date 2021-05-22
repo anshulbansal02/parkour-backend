@@ -1,3 +1,0 @@
-function renderPDF() {
-  return null;
-}
