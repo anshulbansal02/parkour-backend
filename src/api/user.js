@@ -8,8 +8,10 @@ const {
   authenticate,
 } = require("../auth/index.js");
 const Response = require("../response/index.js");
+const { fileware } = require("../middlewares/index.js");
 
 const { stringFields } = require("../utils/index.js");
+const { mimeTypes } = require("../constants/index.js");
 
 const router = Router();
 const { BadRequest, OK, NotFound, Unauthorized } = Response;
@@ -73,7 +75,6 @@ router.get(
         }
       }
     } catch (err) {
-      console.log(err.name, err.message);
       next(err);
     }
   }
@@ -81,7 +82,7 @@ router.get(
 
 // @ [PATCH] Update User profile
 router.patch("/profile", authenticate(), async (req, res, next) => {
-  const { name, username, avatar, bio } = req.body;
+  const { name, username, bio } = req.body;
 
   try {
     const user = await User.findOne({
@@ -113,6 +114,28 @@ router.patch("/profile", authenticate(), async (req, res, next) => {
     else next(err);
   }
 });
+
+const avatarFileware = fileware("avatar", 1024 * 1024 * 5, mimeTypes.image);
+
+router.put(
+  "/profile/avatar",
+  authenticate(),
+  avatarFileware,
+  async (req, res, next) => {
+    const { username } = req.user;
+    const { filename: avatarFile } = req.file;
+
+    try {
+      const user = await User.findOne({ username });
+      user.avatar = avatarFile;
+
+      await user.validate();
+      await user.save();
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 // @ [PATCH] Update User password
 router.patch("/password", authenticate(), async (req, res, next) => {
