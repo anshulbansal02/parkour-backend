@@ -45,12 +45,13 @@ app.get("/", (req, res) => {
 // Controller Routes
 app.use("/api/plans", controllers.planRoute);
 app.use("/api/users", controllers.userRoute);
+app.use("/api/inventory", controllers.inventoryRoute);
 
 // Error Handlers
 app.use(notFoundErrorHandler);
 app.use(genericErrorHandler);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () =>
   console.log(`[INFO] Server started on address: http://127.0.0.1:${PORT}/`)
 );
