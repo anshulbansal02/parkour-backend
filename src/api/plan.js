@@ -7,14 +7,14 @@ const { Plan, User } = require("./../entities/index.js");
 const Response = require("../response/index.js");
 const { authenticate } = require("../auth/index.js");
 
-const { stringFields } = require("../utils/index.js");
+const { stringFields, validateFilters } = require("../utils/index.js");
 
 const router = Router();
-const { BadRequest, OK } = Response;
+const { BadRequest, OK, Created } = Response;
 
-// CREATE
+// @ [POST] Create plan
 router.post("/", async (req, res, next) => {
-  const { title, notes, meta, slots, type } = req.body;
+  const { type, title, description, meta, days } = req.body;
   // const { username } = req.user;
   const username = "anshulbansal";
 
@@ -26,9 +26,9 @@ router.post("/", async (req, res, next) => {
     const plan = new Plan({
       title,
       type,
-      notes,
+      description,
       meta,
-      slots,
+      days,
       owner: mongoose.Types.ObjectId(_id),
     });
 
@@ -39,7 +39,7 @@ router.post("/", async (req, res, next) => {
     await plan.save();
 
     // TODO: Include only necessary keys
-    res.dispatch(new OK({ data: plan }));
+    res.dispatch(new Created({ data: plan }));
   } catch (err) {
     if (err.name === "ValidationError")
       res.dispatch(
@@ -49,7 +49,59 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-// READ
+const filters = {
+  start: { type: Number, min: 1, max: Infinity, default: 1 },
+  limit: { type: Number, min: 1, max: 20, default: 10 },
+  sortby: { type: "Enumerator", values: ["date", "title"], default: "date" },
+  order: {
+    type: "Enumerator",
+    values: ["asc", "dsc", 1, -1],
+    default: 1,
+  },
+  type: {
+    type: "Enumerator",
+    values: ["diet", "workout", "all"],
+    default: "all",
+  },
+};
+
+//
+router.get("/", async (req, res, next) => {
+  let params = {};
+  ["query", "start", "limit", "sortby", "order", "type"].forEach(
+    (prop) => (params[prop] = req.query[prop])
+  );
+
+  try {
+    params = validateFilters(filters, params);
+  } catch (err) {
+    if (err.name === "FilterError") {
+      res.dispatch(new BadRequest(err.message));
+      return;
+    }
+    next(err);
+    return;
+  }
+
+  // TODO: Find a better way to contruct query
+  if (params.sortby === "date") params.sortby = "createdOn";
+
+  if (params.order === "asc") params.order = 1;
+  else if (params.order === "dsc") params.order = -1;
+
+  const query = [
+    { $sort: { [params.sortby]: params.order } },
+    { $skip: params.start - 1 },
+    { $limit: params.limit },
+  ];
+
+  if (!(params.type === "all")) query.push({ $match: { type: params.type } });
+
+  const agg = await Plan.aggregate(query);
+
+  res.dispatch(new OK({ data: agg }));
+});
+
 router.get("/:id", authenticate(), async (req, res, next) => {
   const { id } = req.params;
 
@@ -63,13 +115,11 @@ router.get("/:id", authenticate(), async (req, res, next) => {
   }
 });
 
-// UPDATE
 router.patch("/:id", authenticate(), async (req, res, next) => {
   const { id } = req.params;
-  const { title, notes, meta, slots, pinned } = req.body;
+  const { title, description, meta, days, pinned } = req.body;
 });
 
-// DELETE
 router.delete("/:id", authenticate(), async (req, res, next) => {
   const { id } = req.params;
 

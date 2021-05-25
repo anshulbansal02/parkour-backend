@@ -2,18 +2,62 @@ function capitalizeFirstLetter(string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-function stringFields(fields, capitalize = false) {
-  fields =
-    typeof fields === "object" && fields !== null
-      ? Object.keys(fields)
-      : fields;
+function stringFields(fields, capitalize = false, lastWord = "and") {
+  fields = Array.isArray(fields) ? fields : Object.keys(fields);
 
   fields = capitalize ? fields.map(capitalizeFirstLetter) : fields;
 
   return fields.reduce((s, v, i, a) => {
-    if (i == a.length - 1) return `${s} and ${v}`;
-    else return `${s}, ${v}`;
+    return (i == a.length - 1) & lastWord
+      ? `${s} ${lastWord} ${v}`
+      : `${s}, ${v}`;
   });
 }
 
-module.exports = { stringFields };
+function validateFilters(filters, params) {
+  Object.keys(params).forEach((key) =>
+    params[key] === undefined ? delete params[key] : {}
+  );
+
+  for (let param of Object.keys(params)) {
+    const filter = filters[param];
+
+    if (!filter) {
+      continue;
+    }
+
+    switch (filter.type) {
+      case Number:
+        params[param] = +params[param];
+        if (params[param] < filter.min || params[param] > filter.max) {
+          throw {
+            name: "FilterError",
+            message: `Query param '${param}' is not range ${filter.min}-${filter.max}`,
+          };
+        }
+        break;
+      case "Enumerator":
+        params[param] = isNaN(+params[param]) ? params[param] : +params[param];
+        if (!filter.values.includes(params[param])) {
+          throw {
+            name: "FilterError",
+            message: `Query param '${param}' is not one of ${stringFields(
+              filter.values,
+              false,
+              "or"
+            )}`,
+          };
+        }
+        break;
+    }
+  }
+
+  const defaultParams = {};
+  Object.keys(filters).forEach((filter) => {
+    defaultParams[filter] = filters[filter].default;
+  });
+
+  return { ...defaultParams, ...params };
+}
+
+module.exports = { stringFields, validateFilters };
