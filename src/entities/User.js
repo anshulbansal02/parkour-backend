@@ -23,8 +23,6 @@ const UserSchema = new Schema({
   avatar: { type: String },
   password: { type: String, required: true },
   createdAt: { type: Date, default: new Date() },
-  plans: { type: [Schema.Types.ObjectId], default: [] },
-  inventory: { type: [Schema.Types.ObjectId], default: [] },
   verified: { type: Boolean, default: false },
 });
 
