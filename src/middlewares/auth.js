@@ -1,14 +1,12 @@
 const jwt = require("jsonwebtoken");
 
-const { Session } = require("./../entities/index.js");
-const Response = require("./../response/index.js");
-const { Unauthorized } = Response;
+const { Session } = require("../entities/index.js");
 
 function authenticate(delegateResponse = false) {
   return async function (req, res, next) {
     function _next() {
       if (!delegateResponse) {
-        res.dispatch(new Unauthorized());
+        res.dispatch.Unauthorized();
         return;
       } else {
         next();
