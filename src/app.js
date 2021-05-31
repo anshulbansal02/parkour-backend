@@ -11,8 +11,7 @@ const {
   genericErrorHandler,
 } = require("./api/handlers.js");
 const controllers = require("./api/index.js");
-const Response = require("./response/index.js");
-const { OK } = Response;
+const { Response } = require("./middlewares/index.js");
 
 // App Instance
 const app = express();
@@ -39,7 +38,7 @@ app.use(express.json());
 app.use(Response.middleware);
 
 app.get("/", (req, res) => {
-  res.dispatch(new OK("Welcome to Parkour"));
+  res.dispatch.OK("Welcome to Parkour");
 });
 
 // Controller Routes

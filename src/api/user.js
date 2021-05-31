@@ -2,19 +2,14 @@ const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 
 const { User } = require("../entities/index.js");
-const {
-  createSession,
-  destroySession,
-  authenticate,
-} = require("../auth/index.js");
-const Response = require("../response/index.js");
-const { fileware } = require("../middlewares/index.js");
+
+const { fileware, auth } = require("../middlewares/index.js");
+const { createSession, destroySession, authenticate } = auth;
 
 const { stringFields } = require("../utils/index.js");
 const { mimeTypes } = require("../constants/index.js");
 
 const router = Router();
-const { BadRequest, OK, NotFound, Unauthorized } = Response;
 
 // [POST] Create Account
 router.post("/register", async (req, res, next) => {
@@ -37,17 +32,17 @@ router.post("/register", async (req, res, next) => {
       if (existingUser.email === email)
         msg = "The email already has a registered account";
       else msg = "Username not available";
-      res.dispatch(new BadRequest(msg));
+      res.dispatch.BadRequest(msg);
     }
 
     await user.setPassword(password);
     await user.save();
 
-    res.dispatch(new OK({ data: user.getProfile() }));
+    res.dispatch.OK({ data: user.getProfile() });
   } catch (err) {
     if (err.name === "ValidationError") {
-      res.dispatch(
-        new BadRequest(`Please provide valid ${stringFields(err.errors)}`)
+      res.dispatch.BadRequest(
+        `Please provide valid ${stringFields(err.errors)}`
       );
     } else next(err);
   }
@@ -65,13 +60,13 @@ router.get(
       const user = await User.findOne({ username });
 
       if (!user) {
-        res.dispatch(new NotFound("User does not exist"));
+        res.dispatch.NotFound("User does not exist");
         return;
       } else {
         if (req.user?.username === username) {
-          res.dispatch(new OK({ data: user.getProfile() }));
+          res.dispatch.OK({ data: user.getProfile() });
         } else {
-          res.dispatch(new OK({ data: user.getPublicProfile() }));
+          res.dispatch.OK({ data: user.getPublicProfile() });
         }
       }
     } catch (err) {
@@ -90,7 +85,7 @@ router.patch("/profile", authenticate(), async (req, res, next) => {
     });
 
     if (!user) {
-      res.dispatch(new NotFound("User does not exist"));
+      res.dispatch.NotFound("User does not exist");
       return;
     } else {
       // Change this approach & check username availability prior to changing
@@ -100,16 +95,14 @@ router.patch("/profile", authenticate(), async (req, res, next) => {
       await user.validate();
       await user.save();
 
-      res.dispatch(new OK({ data: user.getProfile() }));
+      res.dispatch.OK({ data: user.getProfile() });
     }
   } catch (err) {
     if (err.name === "ValidationError")
-      res.dispatch(
-        new BadRequest(
-          `Please provide ${
-            Object.keys(err.errors).length === 1 ? "a" : ""
-          } valid ${stringFields(err.errors)}`
-        )
+      res.dispatch.BadRequest(
+        `Please provide ${
+          Object.keys(err.errors).length === 1 ? "a" : ""
+        } valid ${stringFields(err.errors)}`
       );
     else next(err);
   }
@@ -146,15 +139,15 @@ router.patch("/password", authenticate(), async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.dispatch(new BadRequest("Unknown user"));
+      res.dispatch.BadRequest("Unknown user");
       return;
     } else {
       if (await user.isValidPassword(currentPassword)) {
         await user.setPassword(newPassword);
         await user.save();
-        res.dispatch(new OK("Password was changed successfully"));
+        res.dispatch.OK("Password was changed successfully");
       } else {
-        res.dispatch(new Unauthorized("Current password is incorrect."));
+        res.dispatch.Unauthorized("Current password is incorrect.");
       }
     }
   } catch (err) {
@@ -173,11 +166,11 @@ router.delete("/", authenticate(), async (req, res, next) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.dispatch(new BadRequest("Unknown user"));
+      res.dispatch.BadRequest("Unknown user");
       return;
     } else {
       await User.deleteOne({ username });
-      res.dispatch(new OK({ data: user.getProfile() }));
+      res.dispatch.OK({ data: user.getProfile() });
 
       // Delete users plans as well
     }
@@ -189,13 +182,19 @@ router.delete("/", authenticate(), async (req, res, next) => {
 // [POST] Logs in user and creates a session
 router.post("/login", async (req, res, next) => {
   const { username, password } = req.body;
+
+  if (!(username || password)) {
+    res.dispatch.BadRequest("Username & Password are required to login");
+    return;
+  }
+
   try {
     const user = await User.findOne({ username });
     if (await user.isValidPassword(password)) {
       const token = await createSession({ username });
-      res.dispatch(new OK({ token }));
+      res.dispatch.OK({ token });
     } else {
-      res.dispatch(new Unauthorized("Incorrect credentials"));
+      res.dispatch.Unauthorized("Incorrect credentials");
     }
   } catch (err) {
     return next(err);
@@ -207,7 +206,7 @@ router.get("/logout", authenticate(), async (req, res, next) => {
   try {
     console.log(req.token);
     await destroySession(req.token);
-    res.dispatch(new OK());
+    res.dispatch.OK();
   } catch (err) {
     next(err);
   }
@@ -228,7 +227,7 @@ router.get("/verify", async (req, res) => {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.dispatch(new BadRequest());
+      res.dispatch.BadRequest();
       return;
     }
   } catch (err) {
