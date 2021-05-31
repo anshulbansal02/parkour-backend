@@ -119,3 +119,5 @@ dist
 # Custom
 TODO.md
 static/
+.scannerwork/
+data/
