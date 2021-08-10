@@ -1,47 +1,15 @@
-const ResponseTypes = [
-  //['Response Name', Code]
-  ["OK", 200],
-  ["Created", 201],
-  ["NoContent", 204],
-  ["BadRequest", 400],
-  ["Unauthorized", 401],
-  ["Forbidden", 403],
-  ["NotFound", 404],
-  ["RequestEntityTooLarge", 413],
-  ["ServerError", 500],
-];
-
-// function createResponse(status, code) {
-//   return class {
-//     constructor(payload) {
-//       this.code = code;
-//       this.status = status;
-
-//       if (payload) {
-//         if (typeof payload === "object" && payload !== null)
-//           Object.assign(this, payload);
-//         else this.message = payload;
-//       }
-//     }
-//   };
-// }
-
-// class Response {
-//   static middleware(req, res, next) {
-//     res.dispatch = function (response) {
-//       const { code, ...payload } = response;
-//       res.status(code);
-//       res.json(payload);
-//     };
-//     next();
-//   }
-// }
-
-// for (let type of ResponseTypes) {
-//   Response[type[0]] = createResponse(...type);
-// }
-
-// module.exports = Response;
+const ResponseCodes = {
+  200: "OK",
+  201: "Created",
+  204: "NoContent",
+  400: "BadRequest",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "NotFound",
+  409: "Conflict",
+  413: "RequestEntityTooLarge",
+  500: "ServerError",
+};
 
 class Response {
   #res;
@@ -57,7 +25,6 @@ class Response {
 
   sendResponse(payload, status, code) {
     const responseObject = { status };
-    // Prepare payload
     if (payload) {
       if (typeof payload === "object" && payload !== null)
         Object.assign(responseObject, payload);
@@ -69,23 +36,10 @@ class Response {
   }
 }
 
-// for (let type of ResponseTypes) {
-//   Response[type[0]] = (payload) =>
-//     this.#sendResponse(payload, type[0], type[1]);
-// }
-
-ResponseTypes.forEach((type) => {
-  Response.prototype[type[0]] = function (payload) {
-    this.sendResponse(payload, type[0], type[1]);
+Object.keys(ResponseCodes).forEach((code) => {
+  Response.prototype[ResponseCodes[code]] = function (payload) {
+    this.sendResponse(payload, ResponseCodes[code], code);
   };
 });
 
 module.exports = Response;
-
-/*
-
-res.dispatch.Unauthorized('Invalid token')
-
-res.dispatch.
-
-*/
