@@ -13,36 +13,33 @@ const router = Router();
 
 // [POST] Create Account
 router.post("/register", async (req, res, next) => {
-  const { name, username, email, password } = req.body;
+  const { name, email, password } = req.body;
 
   try {
     const user = new User({
       name,
-      username,
-      email,
+      tempEmail: email,
+      username: email.split("@")[0], // Generate random username
       password,
     });
-    await user.validate();
 
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }],
-    });
-    if (existingUser) {
-      let msg = "";
-      if (existingUser.email === email)
-        msg = "The email already has a registered account";
-      else msg = "Username not available";
-      res.dispatch.BadRequest(msg);
+    if (await User.findOne({ email })) {
+      res.dispatch.BadRequest("The email already has a registered account");
     }
 
     await user.setPassword(password);
+
     await user.save();
 
-    res.dispatch.OK({ data: user.getProfile() });
+    res.dispatch.OK({ data: user.profile });
   } catch (err) {
     if (err.name === "ValidationError") {
       res.dispatch.BadRequest(
-        `Please provide valid ${stringFields(err.errors)}`
+        `Please provide valid ${stringFields(
+          err.errors,
+          false,
+          (lastWord = "and")
+        )}`
       );
     } else next(err);
   }
@@ -50,25 +47,22 @@ router.post("/register", async (req, res, next) => {
 
 // @ [GET] Get User profile by username
 router.get(
-  "/:username",
+  "/profile/:username",
   authenticate((delegateResponse = true)),
   async (req, res, next) => {
-    // If the requested profile is of authenticated user then show private info else only public
     const { username } = req.params;
+    let user;
 
     try {
-      const user = await User.findOne({ username });
-
-      if (!user) {
-        res.dispatch.NotFound("User does not exist");
-        return;
+      if (req.authenticatedUser?.username === username) {
+        user = await User.getProfile(username);
       } else {
-        if (req.user?.username === username) {
-          res.dispatch.OK({ data: user.getProfile() });
-        } else {
-          res.dispatch.OK({ data: user.getPublicProfile() });
-        }
+        user = await User.getPublicProfile(username);
       }
+
+      !user
+        ? res.dispatch.NotFound("User does not exist")
+        : res.dispatch.OK({ data: user });
     } catch (err) {
       next(err);
     }
@@ -77,26 +71,24 @@ router.get(
 
 // @ [PATCH] Update User profile
 router.patch("/profile", authenticate(), async (req, res, next) => {
-  const { name, username, bio } = req.body;
+  const { name, bio } = req.body;
 
   try {
     const user = await User.findOne({
-      username: req.user.username,
+      username: req.authenticatedUser.username,
     });
 
     if (!user) {
       res.dispatch.NotFound("User does not exist");
       return;
-    } else {
-      // Change this approach & check username availability prior to changing
-      user.name = name ? name : user.name;
-      user.username = username ? username : user.username;
-
-      await user.validate();
-      await user.save();
-
-      res.dispatch.OK({ data: user.getProfile() });
     }
+
+    user.name = name !== undefined ? name : user.name;
+    user.bio = bio !== undefined ? bio : user.bio;
+
+    await user.save();
+
+    res.dispatch.OK({ data: user.profile });
   } catch (err) {
     if (err.name === "ValidationError")
       res.dispatch.BadRequest(
@@ -109,20 +101,18 @@ router.patch("/profile", authenticate(), async (req, res, next) => {
 });
 
 const avatarFileware = fileware("avatar", 1024 * 1024 * 5, mimeTypes.image);
-
-router.put(
+router.patch(
   "/profile/avatar",
   authenticate(),
   avatarFileware,
   async (req, res, next) => {
-    const { username } = req.user;
+    const { username } = req.authenticatedUser;
     const { filename: avatarFile } = req.file;
 
     try {
       const user = await User.findOne({ username });
       user.avatar = avatarFile;
 
-      await user.validate();
       await user.save();
     } catch (err) {
       next(err);
@@ -130,16 +120,41 @@ router.put(
   }
 );
 
+router.patch("/username", authenticate(), async (req, res, next) => {
+  const { newUsername } = req.body;
+
+  try {
+    if (await User.exists({ username: newUsername })) {
+      res.dispatch.Conflict("Username is taken");
+    } else {
+      const user = await User.findOne({
+        username: req.authenticatedUser.username,
+      });
+      user.username = newUsername;
+      await user.save();
+
+      res.dispatch.OK({ data: user.profile });
+    }
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      res.dispatch.BadRequest(`Please provide a valid username`);
+    } else next(err);
+  }
+});
+
+// TODO: @ [PATCH] Update user email, triggering email verification
+router.patch("/email", authenticate(), async (req, res, next) => {});
+
 // @ [PATCH] Update User password
 router.patch("/password", authenticate(), async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
-  const { username } = req.user;
+  const { username } = req.authenticatedUser;
 
   try {
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.dispatch.BadRequest("Unknown user");
+      res.dispatch.BadRequest("User does not exist");
       return;
     } else {
       if (await user.isValidPassword(currentPassword)) {
@@ -147,7 +162,7 @@ router.patch("/password", authenticate(), async (req, res, next) => {
         await user.save();
         res.dispatch.OK("Password was changed successfully");
       } else {
-        res.dispatch.Unauthorized("Current password is incorrect.");
+        res.dispatch.Forbidden("Current password is incorrect");
       }
     }
   } catch (err) {
@@ -155,12 +170,9 @@ router.patch("/password", authenticate(), async (req, res, next) => {
   }
 });
 
-// TODO: @ [PATCH] Update user email, triggering email verification
-router.patch("/email", authenticate(), async (req, res, next) => {});
-
 // @ Delete account by username
-router.delete("/", authenticate(), async (req, res, next) => {
-  const { username } = req.user;
+router.post("/deactivate", authenticate(), async (req, res, next) => {
+  const { username } = req.authenticatedUser;
 
   try {
     const user = await User.findOne({ username });
@@ -180,17 +192,19 @@ router.delete("/", authenticate(), async (req, res, next) => {
 });
 
 // [POST] Logs in user and creates a session
-router.post("/login", async (req, res, next) => {
+router.post("/authenticate", async (req, res, next) => {
+  // Takes username and password and creates refresh token session and return same
+
   const { username, password } = req.body;
 
   if (!(username || password)) {
-    res.dispatch.BadRequest("Username & Password are required to login");
+    res.dispatch.BadRequest("Please provide valid username and password");
     return;
   }
 
   try {
     const user = await User.findOne({ username });
-    if (await user.isValidPassword(password)) {
+    if (user && (await user.isValidPassword(password))) {
       const token = await createSession({ username });
       res.dispatch.OK({ token });
     } else {
@@ -199,6 +213,10 @@ router.post("/login", async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
+});
+
+router.get("/access-token", async (req, rest, next) => {
+  // Takes refresh token and issues short lived access tokens
 });
 
 // [GET] Logs out user and destroys the session
