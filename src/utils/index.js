@@ -8,10 +8,16 @@ function stringFields(fields, capitalize = false, lastWord = "and") {
   fields = capitalize ? fields.map(capitalizeFirstLetter) : fields;
 
   return fields.reduce((s, v, i, a) => {
-    return (i == a.length - 1) & lastWord
+    return (i == a.length - 1) && lastWord
       ? `${s} ${lastWord} ${v}`
       : `${s}, ${v}`;
   });
+}
+
+class FilterError extends Error {
+  constructor(message) {
+    this.message = message;
+  }
 }
 
 function validateFilters(filters, params) {
@@ -30,23 +36,17 @@ function validateFilters(filters, params) {
       case Number:
         params[param] = +params[param];
         if (params[param] < filter.min || params[param] > filter.max) {
-          throw {
-            name: "FilterError",
-            message: `Query param '${param}' is not range ${filter.min}-${filter.max}`,
-          };
+          throw new FilterError(`Query param '${param}' is not in range ${filter.min}-${filter.max}`);
         }
         break;
       case "Enumerator":
         params[param] = isNaN(+params[param]) ? params[param] : +params[param];
         if (!filter.values.includes(params[param])) {
-          throw {
-            name: "FilterError",
-            message: `Query param '${param}' is not one of ${stringFields(
-              filter.values,
-              false,
-              "or"
-            )}`,
-          };
+          throw new FilterError(`Query param '${param}' is not one of ${stringFields(
+            filter.values,
+            false,
+            "or"
+          )}`);
         }
         break;
     }
