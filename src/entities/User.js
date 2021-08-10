@@ -9,21 +9,29 @@ const UserSchema = new Schema({
     required: true,
     trim: true,
     match: reMap.name,
+    maxLength: 50,
   },
   username: {
     type: String,
     required: true,
     match: reMap.username,
+    maxLength: 50,
   },
   email: {
     type: String,
+    match: reMap.email,
+    maxLength: 100,
+  },
+  tempEmail: {
+    type: String,
     required: true,
     match: reMap.email,
+    maxLength: 100,
   },
   avatar: { type: String },
+  bio: { type: String, maxLength: 256 },
   password: { type: String, required: true },
   createdAt: { type: Date, default: new Date() },
-  verified: { type: Boolean, default: false },
 });
 
 // Password Methods
@@ -37,23 +45,34 @@ UserSchema.methods.isValidPassword = async function (value) {
   } catch (err) {
     return err;
   }
-  // return bcrypt.compare(value, this.password, (err, same) => {
-  //   return same;
-  // });
 };
 
-UserSchema.methods.getProfile = function () {
-  const { name, username, email, avatar, verified } = this;
-  return { name, username, email, avatar, verified };
+UserSchema.virtual("profile").get(function () {
+  const { name, bio, username, email, avatar } = this;
+  return { name, bio, username, email, avatar };
+});
+
+UserSchema.virtual("publicProfile").get(function () {
+  const { name, bio, username, avatar } = this;
+  return { name, bio, username, avatar };
+});
+
+UserSchema.statics.getProfile = function (username) {
+  return this.findOne(
+    { username },
+    { _id: 0, name: 1, bio: 1, username: 1, email: 1, avatar: 1 }
+  );
 };
 
-UserSchema.methods.getPublicProfile = function () {
-  const { name, username, avatar } = this;
-  return { name, username, avatar };
+UserSchema.statics.getPublicProfile = function (username) {
+  return this.findOne(
+    { username },
+    { _id: 0, name: 1, bio: 1, username: 1, avatar: 1 }
+  );
 };
 
 // Indices
-UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ email: 1 });
 UserSchema.index({ username: 1 }, { unique: true });
 
 const User = model("Users", UserSchema);
