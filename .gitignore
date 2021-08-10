@@ -117,6 +117,7 @@ dist
 
 
 # Custom
+.DS_Store
 TODO.md
 static/
 .scannerwork/
