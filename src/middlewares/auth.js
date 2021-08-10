@@ -2,40 +2,62 @@ const jwt = require("jsonwebtoken");
 
 const { Session } = require("../entities/index.js");
 
+const { SECRET_KEY } = process.env;
+
 function authenticate(delegateResponse = false) {
   return async function (req, res, next) {
-    function _next() {
-      if (!delegateResponse) {
-        res.dispatch.Unauthorized();
-        return;
-      } else {
+    function handleUnauthorizedResponse() {
+      if (delegateResponse) {
         next();
+      } else {
+        res.dispatch.Unauthorized();
       }
     }
 
     const authHeader = req.header("Authorization");
-    const token = authHeader?.split(" ")[1];
+    const accessToken = authHeader?.split(" ")[1];
 
-    if (!token) {
-      _next();
+    if (!accessToken) {
+      handleUnauthorizedResponse();
       return;
     }
 
-    try {
-      const data = jwt.verify(token, process.env.SECRET_KEY);
+    // Check if token is revoked in redis cache
 
-      if (await Session.findOne({ _id: token })) {
-        req.user = data;
-        req.token = token;
-        next();
-      } else {
-        _next();
-      }
+    try {
+      const payload = jwt.verify(token, SECRET_KEY);
+
+      req.authenticatedUser = payload;
+      req.accessToken = accessToken;
     } catch (err) {
-      if (err.name === "JsonWebTokenError") _next();
-      else next(err);
+      if (err.name === "JsonWebTokenError") handleUnauthorizedResponse();
+      else next();
     }
   };
+}
+
+async function createRefreshToken(user) {
+  const payload = {
+    username: user.username,
+    email: user.email,
+  };
+
+  const token = jwt.sign(payload, user.password);
+  await new Session({ token }).save();
+
+  return token;
+}
+
+async function createAccessToken(refreshToken, user) {
+  if (await Session.exists({ token: refreshToken })) {
+    const payload = {
+      exp: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour
+      username: user.username,
+      email: user.email,
+    };
+    const token = jwt.sign(payload, SECRET_KEY);
+    return token;
+  }
 }
 
 async function createSession(payload) {
