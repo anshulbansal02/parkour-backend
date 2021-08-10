@@ -16,8 +16,11 @@ const { Response } = require("./middlewares/index.js");
 // App Instance
 const app = express();
 
-// DB Connection
-const DB_URI = process.env.DB_URI || "mongodb://localhost/parkour";
+DB_URI =
+  process.env.NODE_ENV === "development"
+    ? process.env.DEV_DB_URI || "mongodb://localhost/parkour"
+    : process.env.DB_URI;
+
 mongoose.connect(DB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
