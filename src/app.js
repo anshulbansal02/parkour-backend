@@ -12,7 +12,6 @@ const {
 } = require("./api/handlers.js");
 const controllers = require("./api/index.js");
 const { Response, Auth } = require("./middlewares/index.js");
-const useragent = require("express-useragent");
 
 // App Instance
 const app = express();
@@ -46,9 +45,7 @@ app.get("/", (req, res) => {
 });
 
 app.get("/test", async (req, res, next) => {
-  const clientInfo = useragent.parse(req.headers["user-agent"]);
-
-  res.dispatch.OK(clientInfo);
+  res.dispatch.OK(req.ip);
 });
 
 // Controller Routes
