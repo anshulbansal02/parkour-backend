@@ -1,15 +1,26 @@
 const { model, Schema } = require("mongoose");
 const bcrypt = require("bcrypt");
+const { nanoid } = require("nanoid");
 
 const { reMap } = require("../constants/index.js");
 
+function generateUserId() {
+  return +new Date() + "#" + nanoid(24);
+}
+
 const UserSchema = new Schema({
+  _id: {
+    type: String,
+    required: true,
+    default: generateUserId(),
+  },
   name: {
     type: String,
     required: true,
     trim: true,
     match: reMap.name,
     maxLength: 50,
+    minLength: 3,
   },
   username: {
     type: String,
@@ -32,6 +43,10 @@ const UserSchema = new Schema({
   bio: { type: String, maxLength: 256 },
   password: { type: String, required: true },
   createdAt: { type: Date, default: new Date() },
+});
+
+UserSchema.virtual("userId").get(function () {
+  return this._id;
 });
 
 // Password Methods
