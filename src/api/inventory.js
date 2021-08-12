@@ -3,15 +3,15 @@ const mongoose = require("mongoose");
 
 const { InventoryItem, User } = require("./../entities/index.js");
 
-const { fileware, auth } = require("../middlewares/index.js");
-const { authenticate } = auth;
+const { Fileware, Auth } = require("../middlewares/index.js");
+const { authenticate } = Auth;
 
 const { stringFields } = require("../utils/index.js");
 const { mimeTypes } = require("./../constants/index.js");
 
 const router = Router();
 
-const fileMiddleware = fileware("media", 5 * 1024 * 1024, mimeTypes.media);
+const fileMiddleware = Fileware("media", 5 * 1024 * 1024, mimeTypes.media);
 
 // CREATE
 router.post("/", authenticate(), fileMiddleware, async (req, res, next) => {

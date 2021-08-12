@@ -3,11 +3,12 @@ const jwt = require("jsonwebtoken");
 
 const { User } = require("../entities/index.js");
 
-const { fileware, auth } = require("../middlewares/index.js");
-const { createSession, destroySession, authenticate } = auth;
+const { Fileware, Auth } = require("../middlewares/index.js");
+const { createSession, destroySession, authenticate } = Auth;
 
-const { stringFields } = require("../utils/index.js");
+const { stringFields, generateUsername } = require("../utils/index.js");
 const { mimeTypes } = require("../constants/index.js");
+const { createAccessToken } = require("../middlewares/auth.js");
 
 const router = Router();
 
@@ -16,19 +17,23 @@ router.post("/register", async (req, res, next) => {
   const { name, email, password } = req.body;
 
   try {
-    const user = new User({
-      name,
-      tempEmail: email,
-      username: email.split("@")[0], // Generate random username
-      password,
-    });
-
     if (await User.findOne({ email })) {
       res.dispatch.BadRequest("The email already has a registered account");
+      return;
     }
 
-    await user.setPassword(password);
+    let user = await User.findOne({ tempEmail: email });
 
+    if (user) {
+      user.name = name;
+    } else {
+      user = new User({
+        name,
+        tempEmail: email,
+        username: generateUsername(name), // Generate random username
+      });
+    }
+    await user.setPassword(password);
     await user.save();
 
     res.dispatch.OK({ data: user.profile });
@@ -100,7 +105,7 @@ router.patch("/profile", authenticate(), async (req, res, next) => {
   }
 });
 
-const avatarFileware = fileware("avatar", 1024 * 1024 * 5, mimeTypes.image);
+const avatarFileware = Fileware("avatar", 1024 * 1024 * 5, mimeTypes.image);
 router.patch(
   "/profile/avatar",
   authenticate(),
@@ -143,7 +148,30 @@ router.patch("/username", authenticate(), async (req, res, next) => {
 });
 
 // TODO: @ [PATCH] Update user email, triggering email verification
-router.patch("/email", authenticate(), async (req, res, next) => {});
+router.patch("/email", authenticate(), async (req, res, next) => {
+  const { newEmail } = req.body;
+
+  try {
+    if (await User.exists({ email: newEmail })) {
+      res.dispatch.Conflict(
+        "Email is already registered with some other account"
+      );
+    } else {
+      const user = await User.findOne({
+        username: req.authenticatedUser.username,
+      });
+
+      user.tempEmail = newEmail;
+      await user.save();
+
+      // Trigger email verification
+
+      res.dispatch.Accepted(
+        "Complete email verification to update email address"
+      );
+    }
+  } catch (err) {}
+});
 
 // @ [PATCH] Update User password
 router.patch("/password", authenticate(), async (req, res, next) => {
@@ -193,20 +221,20 @@ router.post("/deactivate", authenticate(), async (req, res, next) => {
 
 // [POST] Logs in user and creates a session
 router.post("/authenticate", async (req, res, next) => {
-  // Takes username and password and creates refresh token session and return same
-
   const { username, password } = req.body;
 
-  if (!(username || password)) {
+  if (!(username && password)) {
     res.dispatch.BadRequest("Please provide valid username and password");
     return;
   }
 
   try {
-    const user = await User.findOne({ username });
+    const user = await User.findOne({
+      $or: [{ username }, { email: username }],
+    });
     if (user && (await user.isValidPassword(password))) {
-      const token = await createSession({ username });
-      res.dispatch.OK({ token });
+      const token = await createSession(req, user);
+      res.dispatch.OK({ refresh_token: token });
     } else {
       res.dispatch.Unauthorized("Incorrect credentials");
     }
@@ -215,14 +243,11 @@ router.post("/authenticate", async (req, res, next) => {
   }
 });
 
-router.get("/access-token", async (req, rest, next) => {
-  // Takes refresh token and issues short lived access tokens
-});
+router.get("/access-token", createAccessToken);
 
 // [GET] Logs out user and destroys the session
 router.get("/logout", authenticate(), async (req, res, next) => {
   try {
-    console.log(req.token);
     await destroySession(req.token);
     res.dispatch.OK();
   } catch (err) {

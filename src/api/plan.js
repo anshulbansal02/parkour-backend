@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 
 const { Plan, User } = require("./../entities/index.js");
 
-const { auth } = require("../middlewares/index.js");
-const { authenticate } = auth;
+const { Auth } = require("../middlewares/index.js");
+const { authenticate } = Auth;
 
 const { stringFields, validateFilters } = require("../utils/index.js");
 

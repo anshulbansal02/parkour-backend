@@ -1,5 +1,5 @@
-const fileware = require("./fileware.js");
-const auth = require("./auth.js");
+const Fileware = require("./fileware.js");
+const Auth = require("./auth.js");
 const Response = require("./response.js");
 
-module.exports = { fileware, auth, Response };
+module.exports = { Fileware, Auth, Response };
