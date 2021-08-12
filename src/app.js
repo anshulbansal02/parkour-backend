@@ -11,7 +11,8 @@ const {
   genericErrorHandler,
 } = require("./api/handlers.js");
 const controllers = require("./api/index.js");
-const { Response } = require("./middlewares/index.js");
+const { Response, Auth } = require("./middlewares/index.js");
+const useragent = require("express-useragent");
 
 // App Instance
 const app = express();
@@ -44,7 +45,14 @@ app.get("/", (req, res) => {
   res.dispatch.OK("Welcome to Parkour");
 });
 
+app.get("/test", async (req, res, next) => {
+  const clientInfo = useragent.parse(req.headers["user-agent"]);
+
+  res.dispatch.OK(clientInfo);
+});
+
 // Controller Routes
+app.use(Auth.tokenParser);
 app.use("/api/plans", controllers.planRoute);
 app.use("/api/users", controllers.userRoute);
 app.use("/api/inventory", controllers.inventoryRoute);
