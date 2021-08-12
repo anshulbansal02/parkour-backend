@@ -1,12 +1,15 @@
 const { model, Schema } = require("mongoose");
 
-const TOKEN_MAX_AGE = "20d";
-
 const SessionSchema = new Schema({
   _id: { type: String, alias: "token", required: true },
+  userId: { type: String, required: true },
+  ip: { type: String },
+  agent: { type: String },
+  platform: { type: String },
+  location: { type: String },
 });
 
-SessionSchema.index({ expires: TOKEN_MAX_AGE });
+SessionSchema.index({ userId: 1, _id: 1 });
 
 const Session = model("Sessions", SessionSchema);
 
