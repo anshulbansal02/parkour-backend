@@ -45,7 +45,19 @@ app.get("/", (req, res) => {
 });
 
 app.get("/test", async (req, res, next) => {
-  res.dispatch.OK(req.ip);
+  const ip1 = (
+    req.headers["x-forwarded-for"] ||
+    req.connection.remoteAddress ||
+    ""
+  )
+    .split(",")[0]
+    .trim();
+
+  const ip2 =
+    req.headers["x-forwarded-for"] || req.socket.remoteAddress || null;
+  const ip3 = req.connection.remoteAddress;
+  const ip4 = req.ip;
+  res.dispatch.OK({ ip1, ip2, ip3, ip4 });
 });
 
 // Controller Routes
