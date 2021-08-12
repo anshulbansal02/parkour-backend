@@ -1,6 +1,7 @@
 const ResponseCodes = {
   200: "OK",
   201: "Created",
+  202: "Accepted",
   204: "NoContent",
   400: "BadRequest",
   401: "Unauthorized",
