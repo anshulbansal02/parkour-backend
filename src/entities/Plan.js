@@ -33,7 +33,7 @@ const PlanSchema = new Schema({
   description: { type: String, maxlength: 500 },
   meta: { type: Map },
   days: { type: [Day], required: true },
-  owner: { type: Schema.Types.ObjectId, ref: "Users", required: true },
+  owner: { type: String, ref: "Users", required: true },
   pinned: { type: Boolean, default: false },
   deleted: { type: Boolean, default: false },
   createdOn: { type: Date, default: new Date() },

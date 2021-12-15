@@ -30,7 +30,7 @@ mongoose.connect(DB_URI, {
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "Error connecting to database!"));
 db.once("open", () => {
-  console.log("[INFO] Connected to database");
+  console.log(`[INFO] Connected to database at ${DB_URI}`);
 });
 
 // Middlewares
@@ -42,22 +42,6 @@ app.use(Response.middleware);
 
 app.get("/", (req, res) => {
   res.dispatch.OK("Welcome to Parkour");
-});
-
-app.get("/test", async (req, res, next) => {
-  const ip1 = (
-    req.headers["x-forwarded-for"] ||
-    req.connection.remoteAddress ||
-    ""
-  )
-    .split(",")[0]
-    .trim();
-
-  const ip2 =
-    req.headers["x-forwarded-for"] || req.socket.remoteAddress || null;
-  const ip3 = req.connection.remoteAddress;
-  const ip4 = req.ip;
-  res.dispatch.OK({ ip1, ip2, ip3, ip4 });
 });
 
 // Controller Routes

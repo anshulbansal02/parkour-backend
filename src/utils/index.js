@@ -37,7 +37,7 @@ function generateUsername(name, maxSeed = 999) {
 
 class FilterError extends Error {
   constructor(message) {
-    this.message = message;
+    super(message);
   }
 }
 

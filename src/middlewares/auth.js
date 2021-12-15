@@ -3,8 +3,52 @@ const useragent = require("express-useragent");
 
 const { Session } = require("../entities/index.js");
 
-const { REFRESH_TOKEN_KEY, ACCESS_TOKEN_KEY } = process.env;
+const { tokenBlocklist } = require("./../services/index.js");
 
+// Classes
+class Token {
+  constructor(expire, key) {
+    this.key = key;
+    this.expire = expire;
+  }
+
+  sign(payload) {
+    const exp = Math.floor(Date.now() / 1000) + this.expire;
+    return jwt.sign(
+      {
+        exp,
+        ...payload,
+      },
+      this.key
+    );
+  }
+
+  verify(token) {
+    try {
+      return jwt.verify(token, this.key);
+    } catch (err) {
+      if (err.name === "TokenExpiredError") {
+        throw new TokenError("The token has expired");
+      } else {
+        throw new TokenError("Invalid token");
+      }
+    }
+  }
+}
+
+const AccessToken = new Token(3600, process.env.ACCESS_TOKEN_KEY);
+const SessionToken = new Token(
+  60 * 60 * 24 * 180,
+  process.env.SESSION_TOKEN_KEY
+);
+
+class TokenError extends Error {
+  constructor(message) {
+    super(message);
+  }
+}
+
+// Middlewares
 function tokenParser(req, res, next) {
   const authHeader = req.header("Authorization");
   const token = authHeader?.split(" ")[1];
@@ -25,16 +69,18 @@ function authenticate(delegateResponse = false) {
 
     if (!req.token) {
       handleUnauthorizedResponse(
-        "Provide bearer access token in authorzation header"
+        "Provide bearer access token in authorization header"
       );
       return;
     }
 
-    // Check if token is revoked in redis cache
+    if (await tokenBlocklist.exists(req.token)) {
+      handleUnauthorizedResponse("Invalid access token");
+      return;
+    }
 
     try {
-      const payload = jwt.verify(req.token, ACCESS_TOKEN_KEY);
-
+      const payload = AccessToken.verify(req.token);
       req.authenticatedUser = payload;
 
       next();
@@ -48,82 +94,64 @@ function authenticate(delegateResponse = false) {
   };
 }
 
+// Functions
 async function createSession(req, user) {
-  const payload = {
-    userId: user.userId,
-  };
-
-  const token = jwt.sign(payload, REFRESH_TOKEN_KEY);
+  const sessionToken = SessionToken.sign({ userId: user.userId });
+  const accessToken = AccessToken.sign({ userId: user.userId });
 
   const clientInfo = useragent.parse(req.header("user-agent"));
-
   const session = new Session({
-    _id: token,
+    _id: sessionToken,
+    accessTokens: [accessToken],
     userId: user.userId,
-    ip: req.ip,
-    agent: req.agent,
-  });
-
-  return token;
-}
-
-async function createSession(req, user) {
-  const payload = {
-    ip: req.ip,
+    ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress || "",
+    agent: `${clientInfo.browser} ${clientInfo.version}`,
+    platform: `${clientInfo.platform} (${clientInfo.os})`,
     location: "",
-    agent: "",
-    platform: "",
-    userId: user.userId,
+  });
+  await session.save();
+
+  return {
+    refresh_token: sessionToken,
+    access_token: accessToken,
+    expire: AccessToken.expire,
   };
-
-  const token = jwt.sign(payload, REFRESH_TOKEN_KEY);
-  await new Session({ token }).save();
-
-  return token;
 }
 
-async function createAccessToken(req, res, next) {
-  const authHeader = req.header("Authorization");
-  const refreshToken = authHeader?.split(" ")[1];
+function renewSession(sessionToken) {}
 
-  if (!refreshToken) {
-    res.dispatch.BadRequest("Please provide a bearer refresh token");
-    return;
-  }
+async function revokeSession(sessionToken) {
+  const session = await Session.findOneAndDelete({ _id: sessionToken });
 
-  const EXPIRE_TIME = 3600; // seconds
-
-  try {
-    const session = jwt.verify(refreshToken, REFRESH_TOKEN_KEY);
-
-    if (await Session.exists({ _id: refreshToken })) {
-      const accessToken = jwt.sign(
-        {
-          exp: Math.floor(Date.now() / 1000) + EXPIRE_TIME,
-          userId: session.userId,
-        },
-        ACCESS_TOKEN_KEY
-      );
-
-      res.dispatch.OK({ access_token: accessToken, expires: EXPIRE_TIME });
-    } else {
-      res.dispatch.Unauthorized("Invalid token");
-    }
-  } catch (err) {
-    if (err.name === "JsonWebTokenError")
-      res.dispatch.Unauthorized("Invalid token");
-    else next();
-  }
+  await tokenBlocklist.add(...session.accessTokens);
 }
 
-async function destroySession(token) {
-  await Session.deleteOne({ _id: token });
+async function createAccessToken(sessionToken) {
+  const { userId } = SessionToken.verify(sessionToken);
+
+  const session = await Session.findOne({ _id: sessionToken });
+  if (!session) {
+    throw new TokenError("Invalid refresh token");
+  }
+
+  let { accessTokens } = session;
+  const lastToken = accessTokens.pop();
+
+  if (jwt.decode(lastToken).exp - Math.floor(+new Date() / 1000) >= 1800) {
+    return lastToken;
+  } else {
+    const accessToken = AccessToken.sign({ userId });
+    session.accessTokens = [lastToken, accessToken];
+    await session.save();
+    return accessToken;
+  }
 }
 
 module.exports = {
-  createSession,
-  authenticate,
-  destroySession,
-  createAccessToken,
   tokenParser,
+  authenticate,
+  createSession,
+  renewSession,
+  revokeSession,
+  createAccessToken,
 };

@@ -1,8 +1,10 @@
 const { model, Schema } = require("mongoose");
 
 const SessionSchema = new Schema({
-  _id: { type: String, alias: "token", required: true },
+  _id: { type: String, alias: "refreshToken", required: true },
+  accessTokens: { type: [String] },
   userId: { type: String, required: true },
+  createdAt: { type: Date, default: () => new Date() },
   ip: { type: String },
   agent: { type: String },
   platform: { type: String },

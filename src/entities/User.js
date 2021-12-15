@@ -12,7 +12,8 @@ const UserSchema = new Schema({
   _id: {
     type: String,
     required: true,
-    default: generateUserId(),
+    alias: "userId",
+    default: () => generateUserId(),
   },
   name: {
     type: String,
@@ -20,24 +21,29 @@ const UserSchema = new Schema({
     trim: true,
     match: reMap.name,
     maxLength: 50,
-    minLength: 3,
   },
   username: {
     type: String,
     required: true,
     match: reMap.username,
     maxLength: 50,
+    minLength: 3,
   },
   email: {
     type: String,
     match: reMap.email,
     maxLength: 100,
+    required: true,
   },
   tempEmail: {
     type: String,
-    required: true,
     match: reMap.email,
     maxLength: 100,
+  },
+  verified: {
+    type: Boolean,
+    required: true,
+    default: false,
   },
   avatar: { type: String },
   bio: { type: String, maxLength: 256 },
@@ -45,14 +51,13 @@ const UserSchema = new Schema({
   createdAt: { type: Date, default: new Date() },
 });
 
-UserSchema.virtual("userId").get(function () {
-  return this._id;
-});
-
 // Password Methods
-UserSchema.methods.setPassword = async function (value) {
-  this.password = await bcrypt.hash(value, 10);
-};
+const SALT_FACTOR = 10;
+UserSchema.pre("save", async function (next) {
+  if (this.isModified("password"))
+    this.password = await bcrypt.hash(this.password, SALT_FACTOR);
+  return next();
+});
 
 UserSchema.methods.isValidPassword = async function (value) {
   try {
