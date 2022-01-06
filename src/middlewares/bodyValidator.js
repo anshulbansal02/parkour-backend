@@ -2,9 +2,13 @@ const Joi = require("joi");
 
 const { stringFields } = require("../utils/index.js");
 
-function validateBody(bodySchema, choice = []) {
+function validateBody(bodySchema, choice = null, xorMessage) {
   return async (req, res, next) => {
-    const schema = Joi.object(bodySchema);
+    const schema = choice
+      ? Joi.object(bodySchema)
+          .xor(...choice)
+          .messages({ "object.missing": xorMessage })
+      : Joi.object(bodySchema);
 
     try {
       req.body = await schema.validateAsync(req.body, { abortEarly: false });
