@@ -36,17 +36,18 @@ class Token {
   }
 }
 
-const AccessToken = new Token(3600, process.env.ACCESS_TOKEN_KEY);
+class TokenError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "TokenError";
+  }
+}
+
+const AccessToken = new Token(60 * 60, process.env.ACCESS_TOKEN_KEY);
 const SessionToken = new Token(
   60 * 60 * 24 * 180,
   process.env.SESSION_TOKEN_KEY
 );
-
-class TokenError extends Error {
-  constructor(message) {
-    super(message);
-  }
-}
 
 // Middlewares
 function tokenParser(req, res, next) {
@@ -59,7 +60,7 @@ function tokenParser(req, res, next) {
 
 function authenticate(delegateResponse = false) {
   return async function (req, res, next) {
-    function handleUnauthorizedResponse(message) {
+    function handleUnauthorizedResponse(message = "") {
       if (delegateResponse) {
         next();
       } else {
@@ -67,6 +68,7 @@ function authenticate(delegateResponse = false) {
       }
     }
 
+    // Request doesn't have any token
     if (!req.token) {
       handleUnauthorizedResponse(
         "Provide bearer access token in authorization header"
@@ -74,21 +76,27 @@ function authenticate(delegateResponse = false) {
       return;
     }
 
+    // Check token blocklist
     if (await tokenBlocklist.exists(req.token)) {
       handleUnauthorizedResponse("Invalid access token");
       return;
     }
 
     try {
+      // Verify token validity
       const payload = AccessToken.verify(req.token);
+
+      // // Verify roles associated with token
+      // if (!(payload.role in roles)) {
+      //   handleUnauthorizedResponse();
+      // }
+
+      // Attach authenticated user to request
       req.authenticatedUser = payload;
 
       next();
     } catch (err) {
-      if (err.name === "JsonWebTokenError")
-        handleUnauthorizedResponse("Invalid access token");
-      if (err.name === "TokenExpiredError")
-        handleUnauthorizedResponse("The access token has expired");
+      if (err.name === "TokenError") handleUnauthorizedResponse(err.message);
       else next(err);
     }
   };
@@ -96,9 +104,11 @@ function authenticate(delegateResponse = false) {
 
 // Functions
 async function createSession(req, user) {
+  // Create access and session tokens
   const sessionToken = SessionToken.sign({ userId: user.userId });
   const accessToken = AccessToken.sign({ userId: user.userId });
 
+  // Create session in db
   const clientInfo = useragent.parse(req.header("user-agent"));
   const session = new Session({
     _id: sessionToken,
@@ -118,17 +128,33 @@ async function createSession(req, user) {
   };
 }
 
-function renewSession(sessionToken) {}
+async function renewSession(sessionToken) {
+  const session = await Session.findOne({ _id: sessionToken });
+
+  if (!session) {
+    throw new TokenError("Invalid session token");
+  }
+
+  const newSessionToken = SessionToken.sign({ userId: session.userId });
+  session._id = newSessionToken;
+  const renewedSession = new Session(session.toObject());
+
+  await Session.deleteOne({ _id: sessionToken });
+  await renewedSession.save();
+
+  return newSessionToken;
+}
 
 async function revokeSession(sessionToken) {
   const session = await Session.findOneAndDelete({ _id: sessionToken });
-
   await tokenBlocklist.add(...session.accessTokens);
 }
 
 async function createAccessToken(sessionToken) {
+  // Verify session token
   const { userId } = SessionToken.verify(sessionToken);
 
+  // Check if session token exists
   const session = await Session.findOne({ _id: sessionToken });
   if (!session) {
     throw new TokenError("Invalid refresh token");
@@ -137,6 +163,7 @@ async function createAccessToken(sessionToken) {
   let { accessTokens } = session;
   const lastToken = accessTokens.pop();
 
+  // create and add new access token to session if last access token is more than 30 minutes old else return same
   if (jwt.decode(lastToken).exp - Math.floor(+new Date() / 1000) >= 1800) {
     return lastToken;
   } else {
