@@ -6,7 +6,13 @@ const { User } = require("../entities/index.js");
 const { userIdMap } = require("./../services/index.js");
 
 const { Fileware, Auth, ValidateBody } = require("../middlewares/index.js");
-const { createSession, revokeSession, createAccessToken, authenticate } = Auth;
+const {
+  createSession,
+  revokeSession,
+  createAccessToken,
+  renewSession,
+  authenticate,
+} = Auth;
 
 const { generateUsername } = require("../utils/index.js");
 const { mimeTypes, reMap } = require("../constants/index.js");
@@ -304,6 +310,8 @@ router.post(
   }
 );
 
+// Authorisation and Authentication APIs
+
 // [POST] Logs in user and creates a session
 router.post(
   "/authenticate",
@@ -311,17 +319,15 @@ router.post(
     {
       username: Joi.string(),
       email: Joi.string(),
-      password: Joi.string().required(),
+      password: Joi.string()
+        .required()
+        .messages({ "any.required": "provide valid password" }),
     },
-    ["username", "email"]
+    ["username", "email"],
+    "provide valid username or email"
   ),
   async (req, res, next) => {
     const { username, email, password } = req.body;
-
-    if (!((username || email) && password)) {
-      res.dispatch.BadRequest("Provide valid username and password");
-      return;
-    }
 
     try {
       const user = await User.findOne({
@@ -347,6 +353,7 @@ router.post(
   }
 );
 
+// [GET] Creates new access token for given session token
 router.get("/access-token", async (req, res, next) => {
   if (!req.token) {
     res.dispatch.Unauthorized(
@@ -364,6 +371,24 @@ router.get("/access-token", async (req, res, next) => {
   }
 });
 
+// [GET] Renews session token
+router.get("/renew-session", async (req, res, next) => {
+  if (!req.token) {
+    res.dispatch.Unauthorized(
+      "Provide bearer refresh token in authorization header"
+    );
+    return;
+  }
+
+  try {
+    const session_token = await renewSession(req.token);
+    res.dispatch.OK({ session_token });
+  } catch (err) {
+    if (err.name == "TokenError") res.dispatch.BadRequest(err.message);
+    else next(err);
+  }
+});
+
 // [GET] Logs out user and destroys the session
 router.post("/logout", authenticate(), async (req, res, next) => {
   const { sessionToken } = req.body;
@@ -375,6 +400,7 @@ router.post("/logout", authenticate(), async (req, res, next) => {
   }
 });
 
+// [GET] Verify email by token
 router.get("/verify/email/:token", async (req, res, next) => {
   const { token } = req.params;
 
